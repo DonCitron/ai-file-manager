@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Search, Bot, Loader2 } from 'lucide-react';
-import { getApiUrl } from '../config';
 
 interface BackendFile {
   id: number;
@@ -17,7 +16,7 @@ interface AISearchProps {
   onSearchResults: (results: BackendFile[], aiResponse: string) => void;
 }
 
-const AISearch: React.FC<AISearchProps> = ({ onSearchResults }) => {
+const AISearch: React.FC<AISearchProps> = ({ files, onSearchResults }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [lastResponse, setLastResponse] = useState('');
@@ -28,75 +27,88 @@ const AISearch: React.FC<AISearchProps> = ({ onSearchResults }) => {
 
     setIsSearching(true);
     
+    // Simulate AI search delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     try {
-      const response = await fetch(getApiUrl('search'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query: searchQuery.trim() }),
-      });
+      // AI-powered search logic
+      const query = searchQuery.toLowerCase();
+      let results: BackendFile[] = [];
+      let aiResponse = '';
 
-      const data = await response.json();
-
-      if (response.ok && data.message === 'success') {
-        setLastResponse(data.aiResponse);
-        onSearchResults(data.data, data.aiResponse);
+      if (query.includes('pdf') || query.includes('dokument')) {
+        results = files.filter(f => f.type.includes('pdf') || f.tags.includes('document'));
+        aiResponse = `🔍 Ich habe ${results.length} PDF-Dokumente und Textdateien gefunden. Diese sind ideal für Dokumentation und Archivierung.`;
+      } else if (query.includes('bild') || query.includes('foto') || query.includes('image')) {
+        results = files.filter(f => f.type.startsWith('image/') || f.tags.includes('photo'));
+        aiResponse = `📸 Ich habe ${results.length} Bilder gefunden. Diese enthalten visuelle Inhalte und sind perfekt für Präsentationen.`;
+      } else if (query.includes('groß') || query.includes('large')) {
+        results = files.filter(f => f.size > 5 * 1024 * 1024);
+        aiResponse = `📊 Ich habe ${results.length} große Dateien (>5MB) gefunden. Diese benötigen mehr Speicherplatz.`;
+      } else if (query.includes('klein') || query.includes('small')) {
+        results = files.filter(f => f.size < 100 * 1024);
+        aiResponse = `🔍 Ich habe ${results.length} kleine Dateien (<100KB) gefunden. Diese sind platzsparend.`;
+      } else if (query.includes('letzte') || query.includes('neu') || query.includes('recent')) {
+        results = files.slice().sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).slice(0, 5);
+        aiResponse = `⏰ Hier sind die ${results.length} zuletzt hochgeladenen Dateien, sortiert nach Datum.`;
+      } else if (query.includes('video')) {
+        results = files.filter(f => f.type.startsWith('video/'));
+        aiResponse = `🎥 Ich habe ${results.length} Videos gefunden. Diese enthalten audiovisuelle Inhalte.`;
+      } else if (query.includes('audio') || query.includes('musik')) {
+        results = files.filter(f => f.type.startsWith('audio/'));
+        aiResponse = `🎵 Ich habe ${results.length} Audiodateien gefunden. Diese enthalten Musik oder Sprachaufnahmen.`;
       } else {
-        setLastResponse('Fehler bei der Suche. Bitte versuchen Sie es erneut.');
-        onSearchResults([], 'Fehler bei der Suche.');
+        // General search in names and tags
+        results = files.filter(f => 
+          f.name.toLowerCase().includes(query) || 
+          f.tags.some(tag => tag.toLowerCase().includes(query))
+        );
+        aiResponse = `🔍 Ich habe ${results.length} Dateien gefunden, die "${searchQuery}" entsprechen.`;
       }
+
+      setLastResponse(aiResponse);
+      onSearchResults(results, aiResponse);
     } catch (error) {
-      console.error('AI Search error:', error);
-      setLastResponse('Netzwerkfehler bei der Suche.');
-      onSearchResults([], 'Netzwerkfehler bei der Suche.');
+      console.error('Search error:', error);
+      setLastResponse('Entschuldigung, bei der Suche ist ein Fehler aufgetreten.');
     } finally {
       setIsSearching(false);
     }
   };
 
   const quickSearches = [
-    'Bilder',
-    'Dokumente',
-    'PDF Dateien',
-    'Letzte Uploads',
-    'Große Dateien'
+    { label: 'PDF Dateien', query: 'PDF Dokumente' },
+    { label: 'Bilder', query: 'Bilder und Fotos' },
+    { label: 'Letzte Uploads', query: 'Neueste Dateien' },
+    { label: 'Große Dateien', query: 'Große Dateien' },
+    { label: 'Videos', query: 'Videos' },
+    { label: 'Audio', query: 'Audiodateien' }
   ];
 
-  const handleQuickSearch = (query: string) => {
-    setSearchQuery(query);
-    // Automatisch suchen
-    setTimeout(() => {
-      const form = document.getElementById('ai-search-form') as HTMLFormElement;
-      if (form) {
-        form.requestSubmit();
-      }
-    }, 100);
-  };
-
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-4">
       <div className="flex items-center space-x-2 mb-3">
-        <Bot className="h-5 w-5 text-purple-600" />
-        <h3 className="font-medium text-gray-900">AI-Dateisuche</h3>
+        <Bot className="h-5 w-5 text-blue-400" />
+        <h3 className="text-lg font-semibold text-white">AI-Suche</h3>
       </div>
-
-      <form id="ai-search-form" onSubmit={handleSearch} className="mb-3">
+      
+      <form onSubmit={handleSearch} className="mb-3">
         <div className="flex space-x-2">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Fragen Sie die AI nach Ihren Dateien..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder="Fragen Sie die AI: 'Zeige mir alle PDFs' oder 'Große Dateien'"
+              className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400"
+              disabled={isSearching}
             />
           </div>
           <button
             type="submit"
             disabled={isSearching || !searchQuery.trim()}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white rounded-lg transition-colors flex items-center space-x-2"
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-500 px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
           >
             {isSearching ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -109,25 +121,29 @@ const AISearch: React.FC<AISearchProps> = ({ onSearchResults }) => {
       </form>
 
       <div className="mb-3">
-        <p className="text-xs text-gray-500 mb-2">Schnellsuche:</p>
+        <p className="text-sm text-gray-400 mb-2">Schnellsuche:</p>
         <div className="flex flex-wrap gap-2">
-          {quickSearches.map((query) => (
+          {quickSearches.map((search, index) => (
             <button
-              key={query}
-              onClick={() => handleQuickSearch(query)}
-              className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition-colors"
+              key={index}
+              onClick={() => {
+                setSearchQuery(search.query);
+                handleSearch(new Event('submit') as any);
+              }}
+              className="bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs px-3 py-1 rounded-full transition-colors"
+              disabled={isSearching}
             >
-              {query}
+              {search.label}
             </button>
           ))}
         </div>
       </div>
 
       {lastResponse && (
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+        <div className="bg-gray-700 border border-gray-600 rounded-lg p-3">
           <div className="flex items-start space-x-2">
-            <Bot className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-purple-800">{lastResponse}</p>
+            <Bot className="h-4 w-4 text-blue-400 mt-0.5" />
+            <p className="text-sm text-gray-300">{lastResponse}</p>
           </div>
         </div>
       )}

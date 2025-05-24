@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, User, Bot, Upload, File, X, Eye, Download, LogOut } from 'lucide-react';
+import { Send, Sparkles, User, Bot, Upload, File, X, Eye, Download, LogOut, Calendar as CalendarIcon } from 'lucide-react';
 import Login from './components/Login';
+import AISearch from './components/AISearch';
 
 interface BackendFile {
   id: number;
@@ -32,6 +33,8 @@ function App() {
   const [uploadedFiles, setUploadedFiles] = useState<BackendFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [previewFile, setPreviewFile] = useState<BackendFile | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -214,6 +217,50 @@ function App() {
     }
   };
 
+  const handleSearchResults = (results: BackendFile[], response: string) => {
+    setMessages(prev => [...prev, {
+      text: response,
+      isUser: false,
+      files: results
+    }]);
+  };
+
+  const getAIFolders = () => {
+    const folders = [
+      {
+        name: 'Bilder',
+        files: uploadedFiles.filter(f => f.type.startsWith('image/')),
+        icon: '🖼️',
+        count: uploadedFiles.filter(f => f.type.startsWith('image/')).length
+      },
+      {
+        name: 'Dokumente',
+        files: uploadedFiles.filter(f => f.type.includes('pdf') || f.type.includes('document') || f.type.includes('text')),
+        icon: '📄',
+        count: uploadedFiles.filter(f => f.type.includes('pdf') || f.type.includes('document') || f.type.includes('text')).length
+      },
+      {
+        name: 'Videos',
+        files: uploadedFiles.filter(f => f.type.startsWith('video/')),
+        icon: '🎥',
+        count: uploadedFiles.filter(f => f.type.startsWith('video/')).length
+      },
+      {
+        name: 'Audio',
+        files: uploadedFiles.filter(f => f.type.startsWith('audio/')),
+        icon: '🎵',
+        count: uploadedFiles.filter(f => f.type.startsWith('audio/')).length
+      },
+      {
+        name: 'Andere',
+        files: uploadedFiles.filter(f => !f.type.startsWith('image/') && !f.type.startsWith('video/') && !f.type.startsWith('audio/') && !f.type.includes('pdf') && !f.type.includes('document') && !f.type.includes('text')),
+        icon: '📦',
+        count: uploadedFiles.filter(f => !f.type.startsWith('image/') && !f.type.startsWith('video/') && !f.type.startsWith('audio/') && !f.type.includes('pdf') && !f.type.includes('document') && !f.type.includes('text')).length
+      }
+    ];
+    return folders.filter(folder => folder.count > 0);
+  };
+
   if (!isLoggedIn || !user) {
     return <Login onLogin={handleLogin} />;
   }
@@ -227,6 +274,13 @@ function App() {
             <h1 className="text-2xl font-bold">Pasi AI File Manager</h1>
           </div>
           <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setShowCalendar(!showCalendar)}
+              className="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg transition-colors flex items-center space-x-2"
+            >
+              <CalendarIcon className="h-4 w-4" />
+              <span>Kalender</span>
+            </button>
             <span className="text-gray-300">Willkommen, {user.username}</span>
             <button
               onClick={handleLogout}
@@ -240,7 +294,54 @@ function App() {
       </div>
 
       <div className="flex h-screen">
+        {/* AI Folders Sidebar */}
+        <div className="w-64 bg-gray-800 border-r border-gray-700 p-4">
+          <h3 className="text-lg font-semibold text-white mb-4">🤖 AI-Ordner</h3>
+          <div className="space-y-2">
+            <button
+              onClick={() => setSelectedFolder(null)}
+              className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+                selectedFolder === null
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <span className="text-lg">📁</span>
+                <span>Alle Dateien</span>
+              </div>
+              <span className="bg-gray-600 text-xs px-2 py-1 rounded-full">
+                {uploadedFiles.length}
+              </span>
+            </button>
+            
+            {getAIFolders().map((folder) => (
+              <button
+                key={folder.name}
+                onClick={() => setSelectedFolder(folder.name)}
+                className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+                  selectedFolder === folder.name
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <span className="text-lg">{folder.icon}</span>
+                  <span>{folder.name}</span>
+                </div>
+                <span className="bg-gray-600 text-xs px-2 py-1 rounded-full">
+                  {folder.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex-1 flex flex-col">
+          {/* AI Search */}
+          <div className="p-4">
+            <AISearch files={uploadedFiles} onSearchResults={handleSearchResults} />
+          </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {messages.map((message, index) => (
               <div key={index} className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}>
@@ -348,10 +449,15 @@ function App() {
 
         <div className="w-80 bg-gray-800 border-l border-gray-700 p-4">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">🗂️ Intelligente Dateien ({uploadedFiles.length})</h3>
+            <h3 className="text-lg font-semibold text-white">
+              🗂️ {selectedFolder ? `${selectedFolder} (${getAIFolders().find(f => f.name === selectedFolder)?.count || 0})` : `Alle Dateien (${uploadedFiles.length})`}
+            </h3>
             
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {uploadedFiles.map((file) => (
+              {(selectedFolder
+                ? getAIFolders().find(f => f.name === selectedFolder)?.files || []
+                : uploadedFiles
+              ).map((file) => (
                 <div key={file.id} className="bg-gray-700 p-3 rounded border border-gray-600 hover:border-blue-500 transition-colors">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2">
