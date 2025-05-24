@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { User, Lock, Sparkles, LogIn } from 'lucide-react';
-import { getApiUrl } from '../config';
 
 interface LoginProps {
   onLogin: (user: { id: number; username: string; role: string }) => void;
