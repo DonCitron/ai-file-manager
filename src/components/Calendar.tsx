@@ -1,401 +1,228 @@
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  start: Date;
-  end: Date;
-  color: string;
-  description?: string;
-  location?: string;
-  attendees?: string[];
-}
+import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import type { CalendarEvent, DateInfo } from '../types/calendar';
+import { getMonthDays, isSameDay, isSameMonth, formatDate, MONTHS } from '../utils/date';
 
 interface CalendarProps {
-  onEventCreate?: (event: Omit<CalendarEvent, 'id'>) => void;
-  onEventUpdate?: (event: CalendarEvent) => void;
-  onEventDelete?: (eventId: string) => void;
+  onClose: () => void;
 }
 
-const Calendar: React.FC<CalendarProps> = ({ onEventCreate }) => {
+const Calendar: React.FC<CalendarProps> = ({ onClose }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<'day' | 'week' | 'month'>('week');
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [events, setEvents] = useState<CalendarEvent[]>([
+    {
+      id: '1',
+      title: 'AI File Review',
+      start: new Date(2025, 4, 26, 10, 0),
+      end: new Date(2025, 4, 26, 11, 0),
+      description: 'Review uploaded files with AI analysis',
+      color: '#3B82F6'
+    },
+    {
+      id: '2',
+      title: 'Backup Schedule',
+      start: new Date(2025, 4, 28, 14, 0),
+      end: new Date(2025, 4, 28, 15, 0),
+      description: 'Automated backup to Cloudflare R2',
+      color: '#10B981'
+    }
+  ]);
+  const [showEventModal, setShowEventModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [newEventTitle, setNewEventTitle] = useState('');
 
-  const monthNames = [
-    'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
-  ];
+  const today = new Date();
+  const monthDays = getMonthDays(currentDate.getFullYear(), currentDate.getMonth());
 
-  const dayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const getDaysWithEvents = (): DateInfo[] => {
+    return monthDays.map(date => {
+      const dateEvents = events.filter(event => isSameDay(new Date(event.start), date));
+      
+      return {
+        date,
+        isToday: isSameDay(date, today),
+        isCurrentMonth: isSameMonth(date, currentDate),
+        events: dateEvents
+      };
+    });
+  };
 
-  const colors = [
-    'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500', 
-    'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
-  ];
+  const daysWithEvents = getDaysWithEvents();
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
     if (direction === 'prev') {
-      newDate.setMonth(newDate.getMonth() - 1);
+      newDate.setMonth(currentDate.getMonth() - 1);
     } else {
-      newDate.setMonth(newDate.getMonth() + 1);
+      newDate.setMonth(currentDate.getMonth() + 1);
     }
     setCurrentDate(newDate);
   };
 
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    if (direction === 'prev') {
-      newDate.setDate(newDate.getDate() - 7);
-    } else {
-      newDate.setDate(newDate.getDate() + 7);
-    }
-    setCurrentDate(newDate);
+  const handleDateClick = (date: Date) => {
+    setSelectedDate(date);
+    setShowEventModal(true);
   };
 
-  const getWeekDays = () => {
-    const startOfWeek = new Date(currentDate);
-    const day = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - day;
-    startOfWeek.setDate(diff);
+  const addEvent = () => {
+    if (!newEventTitle.trim() || !selectedDate) return;
 
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(startOfWeek);
-      date.setDate(startOfWeek.getDate() + i);
-      days.push(date);
-    }
-    return days;
-  };
-
-  const getMonthDays = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
-
-    const days = [];
-    for (let i = 0; i < 42; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
-      days.push(date);
-    }
-    return days;
-  };
-
-  const getEventsForDate = (date: Date) => {
-    return events.filter(event => {
-      const eventDate = new Date(event.start);
-      return eventDate.toDateString() === date.toDateString();
-    });
-  };
-
-  const handleCreateEvent = (eventData: Omit<CalendarEvent, 'id'>) => {
     const newEvent: CalendarEvent = {
-      ...eventData,
-      id: Date.now().toString()
+      id: Date.now().toString(),
+      title: newEventTitle,
+      start: new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 10, 0),
+      end: new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 11, 0),
+      description: 'Created from AI File Manager',
+      color: '#8B5CF6'
     };
+
     setEvents([...events, newEvent]);
-    if (onEventCreate) {
-      onEventCreate(eventData);
-    }
-    setShowCreateModal(false);
+    setNewEventTitle('');
+    setShowEventModal(false);
+    setSelectedDate(null);
   };
 
-  const CreateEventModal = () => {
-    const [title, setTitle] = useState('');
-    const [startTime, setStartTime] = useState('09:00');
-    const [endTime, setEndTime] = useState('10:00');
-    const [description, setDescription] = useState('');
-    const [color, setColor] = useState(colors[0]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!title || !selectedDate) return;
-
-      const start = new Date(selectedDate);
-      const [startHour, startMin] = startTime.split(':');
-      start.setHours(parseInt(startHour), parseInt(startMin));
-
-      const end = new Date(selectedDate);
-      const [endHour, endMin] = endTime.split(':');
-      end.setHours(parseInt(endHour), parseInt(endMin));
-
-      handleCreateEvent({
-        title,
-        start,
-        end,
-        color,
-        description
-      });
-
-      setTitle('');
-      setDescription('');
-      setStartTime('09:00');
-      setEndTime('10:00');
-    };
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-          <h3 className="text-xl font-bold text-white mb-4">Neuen Termin erstellen</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Titel</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Start</label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Ende</label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Farbe</label>
-              <div className="flex space-x-2">
-                {colors.map((colorClass, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => setColor(colorClass)}
-                    className={`w-8 h-8 rounded-full ${colorClass} ${color === colorClass ? 'ring-2 ring-white' : ''}`}
-                  />
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Beschreibung</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={3}
-              />
-            </div>
-            <div className="flex justify-end space-x-3">
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="bg-gray-800 text-white p-4 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <h2 className="text-xl font-bold">📅 AI File Manager Calendar</h2>
+            <div className="flex items-center space-x-2">
               <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
+                onClick={() => navigateMonth('prev')}
+                className="p-1 hover:bg-gray-700 rounded"
               >
-                Abbrechen
+                <ChevronLeft className="h-5 w-5" />
               </button>
+              <span className="text-lg font-medium min-w-[200px] text-center">
+                {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
+              </span>
               <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                onClick={() => navigateMonth('next')}
+                className="p-1 hover:bg-gray-700 rounded"
               >
-                Erstellen
+                <ChevronRight className="h-5 w-5" />
               </button>
             </div>
-          </form>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-700 rounded"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-      </div>
-    );
-  };
 
-  const renderWeekView = () => {
-    const weekDays = getWeekDays();
-    const hours = Array.from({ length: 24 }, (_, i) => i);
-
-    return (
-      <div className="flex-1 overflow-auto">
-        <div className="grid grid-cols-8 gap-px bg-gray-700">
-          <div className="bg-gray-800 p-2"></div>
-          {weekDays.map((day, index) => (
-            <div key={index} className="bg-gray-800 p-2 text-center">
-              <div className="text-sm text-gray-400">{dayNames[day.getDay()]}</div>
-              <div className={`text-lg font-semibold ${day.toDateString() === new Date().toDateString() ? 'text-blue-400' : 'text-white'}`}>
-                {day.getDate()}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-8 gap-px bg-gray-700" style={{ minHeight: '600px' }}>
-          <div className="bg-gray-800">
-            {hours.map(hour => (
-              <div key={hour} className="h-16 border-b border-gray-700 p-2 text-xs text-gray-400">
-                {hour.toString().padStart(2, '0')}:00
+        {/* Calendar Grid */}
+        <div className="p-4">
+          <div className="grid grid-cols-7 border-b border-gray-200 mb-2">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="py-3 text-center text-sm font-medium text-gray-500">
+                {day}
               </div>
             ))}
           </div>
-          {weekDays.map((day, dayIndex) => (
-            <div key={dayIndex} className="bg-gray-800 relative">
-              {hours.map(hour => (
-                <div
-                  key={hour}
-                  className="h-16 border-b border-gray-700 cursor-pointer hover:bg-gray-700 transition-colors"
-                  onClick={() => {
-                    const clickDate = new Date(day);
-                    clickDate.setHours(hour, 0, 0, 0);
-                    setSelectedDate(clickDate);
-                    setShowCreateModal(true);
-                  }}
-                />
-              ))}
-              {getEventsForDate(day).map(event => {
-                const startHour = event.start.getHours();
-                const startMin = event.start.getMinutes();
-                const endHour = event.end.getHours();
-                const endMin = event.end.getMinutes();
-                const top = (startHour * 64) + (startMin * 64 / 60);
-                const height = ((endHour - startHour) * 64) + ((endMin - startMin) * 64 / 60);
-
-                return (
-                  <div
-                    key={event.id}
-                    className={`absolute left-1 right-1 ${event.color} text-white text-xs p-1 rounded shadow-lg z-10`}
-                    style={{ top: `${top}px`, height: `${height}px` }}
-                  >
-                    <div className="font-semibold truncate">{event.title}</div>
-                    <div className="text-xs opacity-90">
-                      {event.start.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} - 
-                      {event.end.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderMonthView = () => {
-    const monthDays = getMonthDays();
-
-    return (
-      <div className="flex-1">
-        <div className="grid grid-cols-7 gap-px bg-gray-700">
-          {dayNames.map(day => (
-            <div key={day} className="bg-gray-800 p-2 text-center text-sm font-medium text-gray-300">
-              {day}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-px bg-gray-700" style={{ height: 'calc(100vh - 300px)' }}>
-          {monthDays.map((day, index) => {
-            const isCurrentMonth = day.getMonth() === currentDate.getMonth();
-            const isToday = day.toDateString() === new Date().toDateString();
-            const dayEvents = getEventsForDate(day);
-
-            return (
-              <div
+          
+          <div className="grid grid-cols-7 grid-rows-6 gap-1">
+            {daysWithEvents.map((dateInfo, index) => (
+              <div 
                 key={index}
-                className={`bg-gray-800 p-2 cursor-pointer hover:bg-gray-700 transition-colors ${!isCurrentMonth ? 'opacity-50' : ''}`}
-                onClick={() => {
-                  setSelectedDate(day);
-                  setShowCreateModal(true);
-                }}
+                onClick={() => handleDateClick(dateInfo.date)}
+                className={`
+                  min-h-[80px] p-2 border border-gray-200 hover:bg-blue-50 cursor-pointer rounded
+                  ${!dateInfo.isCurrentMonth ? 'text-gray-400 bg-gray-50' : 'bg-white'}
+                  ${dateInfo.isToday ? 'bg-blue-100 border-blue-300' : ''}
+                `}
               >
-                <div className={`text-sm font-medium ${isToday ? 'text-blue-400' : 'text-white'}`}>
-                  {day.getDate()}
+                <div className="flex justify-between items-center mb-1">
+                  <span 
+                    className={`
+                      text-sm font-medium 
+                      ${dateInfo.isToday ? 'bg-blue-500 text-white w-6 h-6 rounded-full flex items-center justify-center' : ''}
+                    `}
+                  >
+                    {dateInfo.date.getDate()}
+                  </span>
+                  {dateInfo.events.length > 0 && !dateInfo.isToday && (
+                    <span className="flex h-2 w-2 rounded-full bg-blue-500"></span>
+                  )}
                 </div>
-                <div className="space-y-1 mt-1">
-                  {dayEvents.slice(0, 3).map(event => (
-                    <div
+                
+                <div className="space-y-1 max-h-[50px] overflow-hidden">
+                  {dateInfo.events.slice(0, 2).map(event => (
+                    <div 
                       key={event.id}
-                      className={`text-xs p-1 rounded ${event.color} text-white truncate`}
+                      className="text-xs py-1 px-1 rounded truncate"
+                      style={{ backgroundColor: `${event.color}20`, color: event.color }}
                     >
                       {event.title}
                     </div>
                   ))}
-                  {dayEvents.length > 3 && (
-                    <div className="text-xs text-gray-400">+{dayEvents.length - 3} mehr</div>
+                  
+                  {dateInfo.events.length > 2 && (
+                    <div className="text-xs text-gray-500">
+                      +{dateInfo.events.length - 2} more
+                    </div>
                   )}
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
+
+        {/* Event Modal */}
+        {showEventModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">
+                  Add Event - {selectedDate && formatDate(selectedDate)}
+                </h3>
+                <button
+                  onClick={() => setShowEventModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Event Title
+                  </label>
+                  <input
+                    type="text"
+                    value={newEventTitle}
+                    onChange={(e) => setNewEventTitle(e.target.value)}
+                    placeholder="Enter event title..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                
+                <div className="flex space-x-3">
+                  <button
+                    onClick={addEvent}
+                    disabled={!newEventTitle.trim()}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Add Event</span>
+                  </button>
+                  <button
+                    onClick={() => setShowEventModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    );
-  };
-
-  return (
-    <div className="h-full bg-gray-900 text-white flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-700">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Erstellen</span>
-          </button>
-          <button
-            onClick={() => setCurrentDate(new Date())}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-          >
-            Heute
-          </button>
-        </div>
-
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => view === 'month' ? navigateMonth('prev') : navigateWeek('prev')}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <h2 className="text-xl font-semibold">
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </h2>
-          <button
-            onClick={() => view === 'month' ? navigateMonth('next') : navigateWeek('next')}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          {(['day', 'week', 'month'] as const).map(viewType => (
-            <button
-              key={viewType}
-              onClick={() => setView(viewType)}
-              className={`px-3 py-1 rounded-lg transition-colors ${
-                view === viewType ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-              }`}
-            >
-              {viewType === 'day' ? 'Tag' : viewType === 'week' ? 'Woche' : 'Monat'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Calendar Content */}
-      {view === 'week' && renderWeekView()}
-      {view === 'month' && renderMonthView()}
-
-      {/* Create Event Modal */}
-      {showCreateModal && <CreateEventModal />}
     </div>
   );
 };

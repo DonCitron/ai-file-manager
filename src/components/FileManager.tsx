@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, User, Bot, Upload, File, X, Eye, Download, LogOut, Calendar as CalendarIcon } from 'lucide-react';
 import AISearch from './AISearch';
+import Calendar from './Calendar';
 import { getApiUrl } from '../config';
 
 interface BackendFile {
@@ -474,6 +475,11 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Calendar Modal */}
+      {showCalendar && (
+        <Calendar onClose={() => setShowCalendar(false)} />
       )}
     </div>
   );
