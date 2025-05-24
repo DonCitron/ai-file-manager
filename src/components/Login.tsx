@@ -12,30 +12,35 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Hardcoded users for demo (works without backend)
+  const validUsers = [
+    { id: 1, username: 'admin1', password: 'admin123', role: 'admin' },
+    { id: 2, username: 'admin2', password: 'admin456', role: 'admin' },
+    { id: 3, username: 'admin3', password: 'admin789', role: 'admin' },
+    { id: 4, username: 'pascal', password: 'secure123', role: 'admin' },
+    { id: 5, username: 'maria', password: 'maria456', role: 'user' },
+    { id: 6, username: 'alex', password: 'alex789', role: 'user' }
+  ];
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     try {
-      const response = await fetch(getApiUrl('login'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        onLogin(data.user);
+      const user = validUsers.find(u => u.username === username && u.password === password);
+      
+      if (user) {
+        onLogin(user);
       } else {
-        setError(data.error || 'Login fehlgeschlagen');
+        setError('Ungültige Anmeldedaten');
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Netzwerkfehler. Bitte versuchen Sie es erneut.');
+      setError('Login fehlgeschlagen. Bitte versuchen Sie es erneut.');
     } finally {
       setIsLoading(false);
     }
