@@ -38,6 +38,11 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [customFolders, setCustomFolders] = useState<string[]>([]);
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [fileToMove, setFileToMove] = useState<BackendFile | null>(null);
+  const [showMoveModal, setShowMoveModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -74,6 +79,16 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
         setUploadedFiles(JSON.parse(savedFiles));
       } catch (error) {
         console.error('Error loading files from localStorage:', error);
+      }
+    }
+    
+    // Load custom folders
+    const savedFolders = localStorage.getItem('customFolders');
+    if (savedFolders) {
+      try {
+        setCustomFolders(JSON.parse(savedFolders));
+      } catch (error) {
+        console.error('Error loading custom folders:', error);
       }
     }
   };
@@ -169,16 +184,34 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
         const data = await response.json();
         setMessages(prev => [...prev, { text: data.response, isUser: false }]);
       } else {
-        // Fallback response
-        const responses = [
-          "🚀 Ich kann Ihnen bei der intelligenten Dateiverwaltung helfen. Laden Sie Dateien hoch und ich organisiere sie automatisch mit KI-Analyse!",
-          "📁 Gerne helfe ich Ihnen bei der smarten Dateisortierung. Meine KI erkennt automatisch Kategorien und erstellt passende Tags.",
-          "🧠 Ich analysiere Ihre Dateien automatisch und erstelle intelligente Kategorien. Probieren Sie es mit einem Upload aus!",
-          "✨ Mit meiner KI-Unterstützung wird Ihre Dateiverwaltung effizienter. Jede Datei wird automatisch analysiert und kategorisiert!"
-        ];
+        // Enhanced AI responses based on user input
+        let aiResponse = "";
+        const lowerInput = userMessage.toLowerCase();
         
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-        setMessages(prev => [...prev, { text: randomResponse, isUser: false }]);
+        if (lowerInput.includes('hilfe') || lowerInput.includes('help')) {
+          aiResponse = "🤖 Gerne helfe ich Ihnen! Ich kann:\n\n📁 Dateien automatisch kategorisieren\n🔍 Dateien durchsuchen\n📂 Ordner verwalten\n🗑️ Dateien löschen\n📅 Termine im Kalender anzeigen\n\nLaden Sie einfach Dateien hoch oder fragen Sie mich etwas!";
+        } else if (lowerInput.includes('datei') || lowerInput.includes('file')) {
+          aiResponse = `📊 Sie haben aktuell ${uploadedFiles.length} Dateien gespeichert:\n\n${getAIFolders().map(folder => `${folder.icon} ${folder.name}: ${folder.count} Dateien`).join('\n')}\n\nMöchten Sie neue Dateien hochladen oder bestehende verwalten?`;
+        } else if (lowerInput.includes('ordner') || lowerInput.includes('folder')) {
+          aiResponse = "📂 Ordner-Verwaltung:\n\n🤖 AI-Ordner: Automatische Kategorisierung\n📁 Meine Ordner: Eigene Ordner erstellen mit '+ Neu'\n📁 Verschieben: Klicken Sie auf das 📁 Symbol bei Dateien\n\nSoll ich Ihnen bei der Ordner-Organisation helfen?";
+        } else if (lowerInput.includes('löschen') || lowerInput.includes('delete')) {
+          aiResponse = "🗑️ Dateien löschen:\n\nKlicken Sie auf das 🗑️ Symbol neben einer Datei um sie zu löschen. Die Datei wird sofort entfernt und kann nicht wiederhergestellt werden.\n\nSoll ich Ihnen zeigen, wie Sie Dateien verwalten können?";
+        } else if (lowerInput.includes('kalender') || lowerInput.includes('termin')) {
+          aiResponse = "📅 Kalender-Funktionen:\n\n📅 Kalender öffnen: Button im Header\n📋 Termine anzeigen: Aktuelle Termine werden angezeigt\n🗓️ Termine verwalten: Einfache Übersicht\n\nMöchten Sie den Kalender öffnen?";
+        } else if (lowerInput.includes('suche') || lowerInput.includes('search')) {
+          aiResponse = "🔍 Such-Funktionen:\n\n🔎 Schnellsuche: Buttons für 'PDF Dateien', 'Bilder', etc.\n💬 AI-Chat: Fragen Sie mich nach bestimmten Dateien\n📂 Ordner-Filter: Klicken Sie auf Ordner in der Sidebar\n\nWas möchten Sie suchen?";
+        } else {
+          // General responses
+          const responses = [
+            "🚀 Ich kann Ihnen bei der intelligenten Dateiverwaltung helfen. Laden Sie Dateien hoch und ich organisiere sie automatisch!",
+            "📁 Gerne helfe ich bei der Dateisortierung. Fragen Sie mich nach Ihren Dateien oder Ordnern!",
+            "🧠 Ich analysiere Ihre Dateien automatisch. Probieren Sie einen Upload aus oder fragen Sie mich etwas!",
+            "✨ Mit meiner Hilfe wird Dateiverwaltung einfacher. Wie kann ich Ihnen heute helfen?"
+          ];
+          aiResponse = responses[Math.floor(Math.random() * responses.length)];
+        }
+        
+        setMessages(prev => [...prev, { text: aiResponse, isUser: false }]);
       }
     } catch (error) {
       console.error('Chat error:', error);
@@ -215,6 +248,46 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
       text: response,
       isUser: false,
       files: results
+    }]);
+  };
+
+  const createCustomFolder = () => {
+    if (!newFolderName.trim()) return;
+    
+    const updatedFolders = [...customFolders, newFolderName.trim()];
+    setCustomFolders(updatedFolders);
+    localStorage.setItem('customFolders', JSON.stringify(updatedFolders));
+    setNewFolderName('');
+    setShowCreateFolder(false);
+  };
+
+  const moveFileToFolder = (targetFolder: string) => {
+    if (!fileToMove) return;
+    
+    const updatedFiles = uploadedFiles.map(file => 
+      file.id === fileToMove.id 
+        ? { ...file, customFolder: targetFolder }
+        : file
+    );
+    
+    setUploadedFiles(updatedFiles);
+    localStorage.setItem('uploadedFiles', JSON.stringify(updatedFiles));
+    setFileToMove(null);
+    setShowMoveModal(false);
+  };
+
+  const getFilesInCustomFolder = (folderName: string) => {
+    return uploadedFiles.filter(file => (file as any).customFolder === folderName);
+  };
+
+  const deleteFile = (fileToDelete: BackendFile) => {
+    const updatedFiles = uploadedFiles.filter(file => file.id !== fileToDelete.id);
+    setUploadedFiles(updatedFiles);
+    localStorage.setItem('uploadedFiles', JSON.stringify(updatedFiles));
+    
+    setMessages(prev => [...prev, {
+      text: `🗑️ Datei "${fileToDelete.name}" wurde erfolgreich gelöscht.`,
+      isUser: false
     }]);
   };
 
@@ -323,6 +396,41 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
                 </span>
               </button>
             ))}
+          </div>
+
+          {/* Custom Folders Section */}
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-md font-semibold text-white">📂 Meine Ordner</h4>
+              <button
+                onClick={() => setShowCreateFolder(true)}
+                className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 rounded transition-colors"
+              >
+                + Neu
+              </button>
+            </div>
+            
+            <div className="space-y-2">
+              {customFolders.map((folderName) => (
+                <button
+                  key={folderName}
+                  onClick={() => setSelectedFolder(`custom:${folderName}`)}
+                  className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
+                    selectedFolder === `custom:${folderName}`
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm">📁</span>
+                    <span className="text-sm">{folderName}</span>
+                  </div>
+                  <span className="bg-gray-600 text-xs px-1 py-0.5 rounded">
+                    {getFilesInCustomFolder(folderName).length}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -441,13 +549,19 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
         <div className="w-80 bg-gray-800 border-l border-gray-700 p-4">
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-white">
-              🗂️ {selectedFolder ? `${selectedFolder} (${getAIFolders().find(f => f.name === selectedFolder)?.count || 0})` : `Alle Dateien (${uploadedFiles.length})`}
+              🗂️ {selectedFolder?.startsWith('custom:') 
+                ? `${selectedFolder.replace('custom:', '')} (${getFilesInCustomFolder(selectedFolder.replace('custom:', '')).length})`
+                : selectedFolder 
+                  ? `${selectedFolder} (${getAIFolders().find(f => f.name === selectedFolder)?.count || 0})` 
+                  : `Alle Dateien (${uploadedFiles.length})`}
             </h3>
             
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {(selectedFolder 
-                ? getAIFolders().find(f => f.name === selectedFolder)?.files || []
-                : uploadedFiles
+              {(selectedFolder?.startsWith('custom:')
+                ? getFilesInCustomFolder(selectedFolder.replace('custom:', ''))
+                : selectedFolder 
+                  ? getAIFolders().find(f => f.name === selectedFolder)?.files || []
+                  : uploadedFiles
               ).map((file) => (
                 <div key={file.id} className="bg-gray-700 p-3 rounded border border-gray-600 hover:border-blue-500 transition-colors">
                   <div className="flex items-center justify-between mb-2">
@@ -456,17 +570,36 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
                       <span className="text-sm font-medium truncate">{file.name}</span>
                     </div>
                     <div className="flex space-x-1">
-                      {file.preview && (
+                      {file.type.startsWith('image/') && (
                         <button
                           onClick={() => setPreviewFile(file)}
                           className="text-gray-400 hover:text-white transition-colors"
+                          title="Vorschau"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                       )}
                       <button
+                        onClick={() => {
+                          setFileToMove(file);
+                          setShowMoveModal(true);
+                        }}
+                        className="text-yellow-400 hover:text-yellow-300 transition-colors"
+                        title="Verschieben"
+                      >
+                        📁
+                      </button>
+                      <button
+                        onClick={() => deleteFile(file)}
+                        className="text-red-400 hover:text-red-300 transition-colors"
+                        title="Löschen"
+                      >
+                        🗑️
+                      </button>
+                      <button
                         onClick={() => downloadFile(file)}
                         className="text-gray-400 hover:text-white transition-colors"
+                        title="Download"
                       >
                         <Download className="h-4 w-4" />
                       </button>
@@ -474,6 +607,9 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
                   </div>
                   <p className="text-xs text-gray-400">{(file.size / 1024).toFixed(1)} KB</p>
                   <p className="text-xs text-gray-500">{new Date(file.uploadDate).toLocaleDateString('de-DE')}</p>
+                  {(file as any).customFolder && (
+                    <p className="text-xs text-green-400">📁 {(file as any).customFolder}</p>
+                  )}
                   {file.aiAnalysis && (
                     <p className="text-xs text-gray-300 mt-1 bg-gray-600 p-1 rounded">{file.aiAnalysis}</p>
                   )}
@@ -491,7 +627,7 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
         </div>
       </div>
 
-      {previewFile && previewFile.preview && (
+      {previewFile && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 rounded-lg max-w-4xl max-h-full overflow-auto">
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
@@ -504,11 +640,22 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
               </button>
             </div>
             <div className="p-4">
-              <img
-                src={previewFile.preview}
-                alt={previewFile.name}
-                className="max-w-full max-h-96 mx-auto"
-              />
+              {previewFile.type.startsWith('image/') ? (
+                <img
+                  src={`data:${previewFile.type};base64,${btoa(previewFile.name)}`}
+                  alt={previewFile.name}
+                  className="max-w-full max-h-96 mx-auto"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkJpbGQgbmljaHQgdmVyZsO8Z2JhcjwvdGV4dD48L3N2Zz4=';
+                  }}
+                />
+              ) : (
+                <div className="text-center py-8">
+                  <File className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-300">Vorschau für diesen Dateityp nicht verfügbar</p>
+                  <p className="text-gray-500 text-sm mt-2">{previewFile.type}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -516,7 +663,7 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
 
       {/* Calendar Modal - Ultra Simple Version */}
       {showCalendar ? (
-        <div
+        <div 
           style={{
             position: 'fixed',
             top: 0,
@@ -530,7 +677,7 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
             zIndex: 9999
           }}
         >
-          <div
+          <div 
             style={{
               backgroundColor: 'white',
               borderRadius: '8px',
@@ -568,10 +715,10 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
                 Einfache Kalender-Version für AI File Manager
               </p>
               
-              <div style={{
-                backgroundColor: '#dbeafe',
-                padding: '16px',
-                borderRadius: '8px',
+              <div style={{ 
+                backgroundColor: '#dbeafe', 
+                padding: '16px', 
+                borderRadius: '8px', 
                 marginBottom: '16px',
                 textAlign: 'left'
               }}>
@@ -606,6 +753,179 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
           </div>
         </div>
       ) : null}
+
+      {/* Create Folder Modal */}
+      {showCreateFolder && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '400px',
+            width: '90%'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', marginBottom: '16px' }}>
+              📁 Neuen Ordner erstellen
+            </h3>
+            <input
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="Ordner-Name eingeben..."
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                marginBottom: '16px',
+                fontSize: '14px'
+              }}
+              onKeyPress={(e) => e.key === 'Enter' && createCustomFolder()}
+            />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowCreateFolder(false)}
+                style={{
+                  padding: '8px 16px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={createCustomFolder}
+                disabled={!newFolderName.trim()}
+                style={{
+                  padding: '8px 16px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  cursor: newFolderName.trim() ? 'pointer' : 'not-allowed',
+                  opacity: newFolderName.trim() ? 1 : 0.5
+                }}
+              >
+                Erstellen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move File Modal */}
+      {showMoveModal && fileToMove && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', marginBottom: '16px' }}>
+              📁 Datei verschieben: {fileToMove.name}
+            </h3>
+            
+            <div style={{ marginBottom: '16px' }}>
+              <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                AI-Ordner:
+              </h4>
+              <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
+                {getAIFolders().map((folder) => (
+                  <button
+                    key={folder.name}
+                    onClick={() => moveFileToFolder(folder.name)}
+                    style={{
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      backgroundColor: '#f9fafb',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <span>{folder.icon}</span>
+                    <span>{folder.name}</span>
+                  </button>
+                ))}
+              </div>
+              
+              {customFolders.length > 0 && (
+                <>
+                  <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                    Meine Ordner:
+                  </h4>
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    {customFolders.map((folderName) => (
+                      <button
+                        key={folderName}
+                        onClick={() => moveFileToFolder(folderName)}
+                        style={{
+                          padding: '8px 12px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                          backgroundColor: '#ecfdf5',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        <span>📁</span>
+                        <span>{folderName}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowMoveModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
