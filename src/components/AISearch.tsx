@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Search, Bot, Loader2 } from 'lucide-react';
+import { getApiUrl } from '../config';
 
 interface BackendFile {
   id: number;
@@ -27,47 +28,60 @@ const AISearch: React.FC<AISearchProps> = ({ files, onSearchResults }) => {
 
     setIsSearching(true);
     
-    // Simulate AI search delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
     try {
-      // AI-powered search logic
-      const query = searchQuery.toLowerCase();
-      let results: BackendFile[] = [];
-      let aiResponse = '';
+      const response = await fetch(getApiUrl('search'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: searchQuery,
+          files: files
+        }),
+      });
 
-      if (query.includes('pdf') || query.includes('dokument')) {
-        results = files.filter(f => f.type.includes('pdf') || f.tags.includes('document'));
-        aiResponse = `🔍 Ich habe ${results.length} PDF-Dokumente und Textdateien gefunden. Diese sind ideal für Dokumentation und Archivierung.`;
-      } else if (query.includes('bild') || query.includes('foto') || query.includes('image')) {
-        results = files.filter(f => f.type.startsWith('image/') || f.tags.includes('photo'));
-        aiResponse = `📸 Ich habe ${results.length} Bilder gefunden. Diese enthalten visuelle Inhalte und sind perfekt für Präsentationen.`;
-      } else if (query.includes('groß') || query.includes('large')) {
-        results = files.filter(f => f.size > 5 * 1024 * 1024);
-        aiResponse = `📊 Ich habe ${results.length} große Dateien (>5MB) gefunden. Diese benötigen mehr Speicherplatz.`;
-      } else if (query.includes('klein') || query.includes('small')) {
-        results = files.filter(f => f.size < 100 * 1024);
-        aiResponse = `🔍 Ich habe ${results.length} kleine Dateien (<100KB) gefunden. Diese sind platzsparend.`;
-      } else if (query.includes('letzte') || query.includes('neu') || query.includes('recent')) {
-        results = files.slice().sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).slice(0, 5);
-        aiResponse = `⏰ Hier sind die ${results.length} zuletzt hochgeladenen Dateien, sortiert nach Datum.`;
-      } else if (query.includes('video')) {
-        results = files.filter(f => f.type.startsWith('video/'));
-        aiResponse = `🎥 Ich habe ${results.length} Videos gefunden. Diese enthalten audiovisuelle Inhalte.`;
-      } else if (query.includes('audio') || query.includes('musik')) {
-        results = files.filter(f => f.type.startsWith('audio/'));
-        aiResponse = `🎵 Ich habe ${results.length} Audiodateien gefunden. Diese enthalten Musik oder Sprachaufnahmen.`;
+      if (response.ok) {
+        const data = await response.json();
+        setLastResponse(data.aiResponse);
+        onSearchResults(data.results, data.aiResponse);
       } else {
-        // General search in names and tags
-        results = files.filter(f => 
-          f.name.toLowerCase().includes(query) || 
-          f.tags.some(tag => tag.toLowerCase().includes(query))
-        );
-        aiResponse = `🔍 Ich habe ${results.length} Dateien gefunden, die "${searchQuery}" entsprechen.`;
-      }
+        // Fallback to local search if API fails
+        const query = searchQuery.toLowerCase();
+        let results: BackendFile[] = [];
+        let aiResponse = '';
 
-      setLastResponse(aiResponse);
-      onSearchResults(results, aiResponse);
+        if (query.includes('pdf') || query.includes('dokument')) {
+          results = files.filter(f => f.type.includes('pdf') || f.tags.includes('document'));
+          aiResponse = `🔍 Ich habe ${results.length} PDF-Dokumente und Textdateien gefunden. Diese sind ideal für Dokumentation und Archivierung.`;
+        } else if (query.includes('bild') || query.includes('foto') || query.includes('image')) {
+          results = files.filter(f => f.type.startsWith('image/') || f.tags.includes('photo'));
+          aiResponse = `📸 Ich habe ${results.length} Bilder gefunden. Diese enthalten visuelle Inhalte und sind perfekt für Präsentationen.`;
+        } else if (query.includes('groß') || query.includes('large')) {
+          results = files.filter(f => f.size > 5 * 1024 * 1024);
+          aiResponse = `📊 Ich habe ${results.length} große Dateien (>5MB) gefunden. Diese benötigen mehr Speicherplatz.`;
+        } else if (query.includes('klein') || query.includes('small')) {
+          results = files.filter(f => f.size < 100 * 1024);
+          aiResponse = `🔍 Ich habe ${results.length} kleine Dateien (<100KB) gefunden. Diese sind platzsparend.`;
+        } else if (query.includes('letzte') || query.includes('neu') || query.includes('recent')) {
+          results = files.slice().sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()).slice(0, 5);
+          aiResponse = `⏰ Hier sind die ${results.length} zuletzt hochgeladenen Dateien, sortiert nach Datum.`;
+        } else if (query.includes('video')) {
+          results = files.filter(f => f.type.startsWith('video/'));
+          aiResponse = `🎥 Ich habe ${results.length} Videos gefunden. Diese enthalten audiovisuelle Inhalte.`;
+        } else if (query.includes('audio') || query.includes('musik')) {
+          results = files.filter(f => f.type.startsWith('audio/'));
+          aiResponse = `🎵 Ich habe ${results.length} Audiodateien gefunden. Diese enthalten Musik oder Sprachaufnahmen.`;
+        } else {
+          results = files.filter(f =>
+            f.name.toLowerCase().includes(query) ||
+            f.tags.some(tag => tag.toLowerCase().includes(query))
+          );
+          aiResponse = `🔍 Ich habe ${results.length} Dateien gefunden, die "${searchQuery}" entsprechen.`;
+        }
+
+        setLastResponse(aiResponse);
+        onSearchResults(results, aiResponse);
+      }
     } catch (error) {
       console.error('Search error:', error);
       setLastResponse('Entschuldigung, bei der Suche ist ein Fehler aufgetreten.');
