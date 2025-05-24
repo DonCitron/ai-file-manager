@@ -514,47 +514,98 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
         </div>
       )}
 
-      {/* Calendar Modal */}
-      {showCalendar && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-800">📅 Kalender</h2>
+      {/* Calendar Modal - Ultra Simple Version */}
+      {showCalendar ? (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '32px',
+              maxWidth: '600px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflow: 'auto'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
+                📅 AI File Manager Kalender
+              </h2>
               <button
                 onClick={() => setShowCalendar(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#6b7280'
+                }}
               >
                 ×
               </button>
             </div>
             
-            <div className="text-center py-8">
-              <div className="text-6xl mb-4">📅</div>
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">Kalender funktioniert!</h3>
-              <p className="text-gray-600 mb-6">Dies ist eine vereinfachte Test-Version des Kalenders.</p>
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <div style={{ fontSize: '64px', marginBottom: '16px' }}>📅</div>
+              <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                Kalender ist aktiv!
+              </h3>
+              <p style={{ color: '#6b7280', marginBottom: '24px' }}>
+                Einfache Kalender-Version für AI File Manager
+              </p>
               
-              <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                <h4 className="font-semibold text-blue-800 mb-2">Beispiel-Termine:</h4>
-                <div className="space-y-2 text-left">
-                  <div className="bg-blue-100 p-2 rounded">
-                    <strong>26. Mai 2025:</strong> AI File Review
-                  </div>
-                  <div className="bg-green-100 p-2 rounded">
-                    <strong>28. Mai 2025:</strong> Backup Schedule
-                  </div>
+              <div style={{
+                backgroundColor: '#dbeafe',
+                padding: '16px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                textAlign: 'left'
+              }}>
+                <h4 style={{ fontWeight: '600', color: '#1e40af', marginBottom: '8px' }}>
+                  Aktuelle Termine:
+                </h4>
+                <div style={{ marginBottom: '8px', backgroundColor: '#bfdbfe', padding: '8px', borderRadius: '4px' }}>
+                  <strong>26. Mai 2025:</strong> AI File Review (10:00 - 11:00)
+                </div>
+                <div style={{ backgroundColor: '#bbf7d0', padding: '8px', borderRadius: '4px' }}>
+                  <strong>28. Mai 2025:</strong> Backup Schedule (14:00 - 15:00)
                 </div>
               </div>
               
               <button
                 onClick={() => setShowCalendar(false)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+                style={{
+                  backgroundColor: '#2563eb',
+                  color: 'white',
+                  padding: '8px 24px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '16px'
+                }}
+                onMouseOver={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#1d4ed8'}
+                onMouseOut={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#2563eb'}
               >
                 Kalender schließen
               </button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };
