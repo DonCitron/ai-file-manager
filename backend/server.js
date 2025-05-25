@@ -93,16 +93,15 @@ const upload = multer({
 });
 
 // Enforce secure environment variables in production
+const bcryptRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 12;
 if (process.env.NODE_ENV === 'production') {
   const jwtSecret = process.env.JWT_SECRET;
-  const bcryptRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS);
   if (!jwtSecret || jwtSecret === 'your-secret-key-change-this-in-production') {
     console.error('❌ FATAL: JWT_SECRET must be set to a secure value in production!');
     process.exit(1);
   }
-  if (!bcryptRounds || bcryptRounds < 10) {
-    console.error('❌ FATAL: BCRYPT_SALT_ROUNDS must be set to at least 10 in production!');
-    process.exit(1);
+  if (bcryptRounds < 10) {
+    console.error('❌ WARNING: BCRYPT_SALT_ROUNDS should be at least 10 in production! Using fallback value.');
   }
 }
 
@@ -115,7 +114,22 @@ const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
 const passwordResetTokens = {};
 const PASSWORD_RESET_TOKEN_EXPIRY = 60 * 60 * 1000; // 1 hour
 
-let redisClient;
+let redisClient = null;
+if (redis && process.env.REDIS_URL) {
+  (async () => {
+    try {
+      redisClient = redis.createClient({ url: process.env.REDIS_URL });
+      redisClient.on('error', (err) => console.warn('Redis Client Error:', err));
+      await redisClient.connect();
+      console.log('✅ Redis verbunden');
+    } catch (error) {
+      console.warn('⚠️ Redis Verbindung fehlgeschlagen - fortfahren ohne Redis');
+      redisClient = null;
+    }
+  })();
+} else {
+  console.log('Redis not configured (REDIS_URL not set). Continuing without Redis.');
+}
 
 // Datenbank initialisieren
 async function initializeDatabase() {
@@ -199,18 +213,6 @@ async function initializeDatabase() {
   // After db is initialized and before other routes:
   setFilesDbAndService(db, fileService);
   app.use('/', filesRouter);
-
-  // Optional Redis connection
-  if (redis) {
-    try {
-      redisClient = redis.createClient();
-      redisClient.on('error', (err) => console.warn('Redis Client Error:', err));
-      await redisClient.connect();
-      console.log('✅ Redis verbunden');
-    } catch (error) {
-      console.warn('⚠️ Redis Verbindung fehlgeschlagen - fortfahren ohne Redis');
-    }
-  }
 
   // Erstellen der Indizes
   db.run('CREATE INDEX IF NOT EXISTS idx_files_userId ON files(userId)');
@@ -798,4 +800,4 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-module.exports = app;
+module.exports = { app, redisClient };

@@ -7,7 +7,9 @@ const redis = require('redis');
 let redisClient;
 try {
   redisClient = require('../server').redisClient;
-} catch {}
+} catch {
+  redisClient = null;
+}
 
 /**
  * Service für Datei-Operationen
