@@ -758,13 +758,48 @@ app.post('/chat/private/:userId', authMiddleware, asyncHandler(async (req, res) 
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Server starten
-const server = app.listen(port, () => {
-  console.log(`\n🚀 Backend-Server läuft auf http://localhost:${port}`);
-  console.log(`📁 Umgebung: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔐 JWT Secret: ${process.env.JWT_SECRET ? 'Konfiguriert' : 'Standard (unsicher!)'}`);
-  console.log(`☁️  R2 Storage: ${process.env.R2_ACCOUNT_ID ? 'Konfiguriert' : 'Nicht konfiguriert'}\n`);
-});
+async function startServer() {
+  let redisClient = null;
+  if (redis && process.env.REDIS_URL) {
+    try {
+      redisClient = redis.createClient({ url: process.env.REDIS_URL });
+      redisClient.on('error', (err) => console.warn('Redis Client Error:', err));
+      await redisClient.connect();
+      console.log('✅ Redis verbunden');
+    } catch (error) {
+      console.warn('⚠️ Redis Verbindung fehlgeschlagen - fortfahren ohne Redis');
+      redisClient = null;
+    }
+  } else {
+    console.log('Redis not configured (REDIS_URL not set). Continuing without Redis.');
+  }
+
+  const fileService = new FileService(db, redisClient);
+
+  // Middleware Setup
+  app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    credentials: true
+  }));
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+  app.use(sanitizeMiddleware);
+  app.use(requestLogger);
+
+  // ... (move all route and middleware setup here, using fileService as needed) ...
+
+  // Start server
+  const server = app.listen(port, () => {
+    console.log(`\n🚀 Backend-Server läuft auf http://localhost:${port}`);
+    console.log(`📁 Umgebung: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔐 JWT Secret: ${process.env.JWT_SECRET ? 'Konfiguriert' : 'Standard (unsicher!)'}`);
+    console.log(`☁️  R2 Storage: ${process.env.R2_ACCOUNT_ID ? 'Konfiguriert' : 'Nicht konfiguriert'}\n`);
+  });
+
+  // ... (rest of shutdown and error handling code) ...
+}
+
+startServer();
 
 // Graceful Shutdown
 process.on('SIGINT', () => {
