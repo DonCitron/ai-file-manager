@@ -1,17 +1,28 @@
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const fs = require('fs');
+const fs = require('fs').promises;
 const path = require('path');
 
-// Cloudflare R2 Client konfigurieren
-const r2Client = new S3Client({
-  region: 'auto',
-  endpoint: process.env.R2_ENDPOINT, // z.B. https://your-account-id.r2.cloudflarestorage.com
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-  },
-});
+let s3Client = null;
+let isR2Available = false;
+
+try {
+  if (process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY) {
+    s3Client = new S3Client({
+      region: 'auto',
+      endpoint: process.env.R2_ENDPOINT,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      }
+    });
+    isR2Available = true;
+  } else {
+    console.log('R2 credentials not found - using local storage only');
+  }
+} catch (error) {
+  console.warn('Failed to initialize R2 client:', error);
+}
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'ai-file-manager';
 
@@ -23,11 +34,15 @@ const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'ai-file-manager';
  * @returns {Promise<string>} - R2 Object Key
  */
 async function uploadToR2(filePath, fileName, contentType) {
+  if (!isR2Available) {
+    return { success: false, message: 'R2 not configured - using local storage' };
+  }
+
   try {
     console.log(`Uploading ${fileName} to Cloudflare R2...`);
     
     // Datei lesen
-    const fileBuffer = fs.readFileSync(filePath);
+    const fileBuffer = await fs.readFile(filePath);
     
     // Eindeutigen Key generieren
     const timestamp = Date.now();
@@ -46,24 +61,23 @@ async function uploadToR2(filePath, fileName, contentType) {
     };
     
     // Upload durchführen
-    const command = new PutObjectCommand(uploadParams);
-    await r2Client.send(command);
+    await s3Client.send(new PutObjectCommand(uploadParams));
     
     console.log(`Successfully uploaded ${fileName} to R2 with key: ${objectKey}`);
     
     // Lokale temporäre Datei löschen
     try {
-      fs.unlinkSync(filePath);
+      await fs.unlink(filePath);
       console.log(`Deleted temporary file: ${filePath}`);
     } catch (deleteError) {
       console.warn(`Could not delete temporary file ${filePath}:`, deleteError.message);
     }
     
-    return objectKey;
+    return { success: true };
     
   } catch (error) {
     console.error(`Error uploading ${fileName} to R2:`, error);
-    throw new Error(`R2 Upload failed: ${error.message}`);
+    return { success: false, error };
   }
 }
 
@@ -74,20 +88,24 @@ async function uploadToR2(filePath, fileName, contentType) {
  * @returns {Promise<string>} - Signierte Download-URL
  */
 async function getDownloadUrl(objectKey, expiresIn = 3600) {
+  if (!isR2Available) {
+    return null;
+  }
+
   try {
     const command = new GetObjectCommand({
       Bucket: BUCKET_NAME,
       Key: objectKey,
     });
     
-    const signedUrl = await getSignedUrl(r2Client, command, { expiresIn });
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn });
     console.log(`Generated download URL for ${objectKey}`);
     
     return signedUrl;
     
   } catch (error) {
     console.error(`Error generating download URL for ${objectKey}:`, error);
-    throw new Error(`Failed to generate download URL: ${error.message}`);
+    return null;
   }
 }
 
@@ -97,13 +115,17 @@ async function getDownloadUrl(objectKey, expiresIn = 3600) {
  * @returns {Promise<boolean>} - Erfolg
  */
 async function deleteFromR2(objectKey) {
+  if (!isR2Available) {
+    return false;
+  }
+
   try {
     const command = new DeleteObjectCommand({
       Bucket: BUCKET_NAME,
       Key: objectKey,
     });
     
-    await r2Client.send(command);
+    await s3Client.send(command);
     console.log(`Successfully deleted ${objectKey} from R2`);
     
     return true;
@@ -120,13 +142,17 @@ async function deleteFromR2(objectKey) {
  * @returns {Promise<boolean>} - Existiert
  */
 async function fileExistsInR2(objectKey) {
+  if (!isR2Available) {
+    return false;
+  }
+
   try {
     const command = new HeadObjectCommand({
       Bucket: BUCKET_NAME,
       Key: objectKey,
     });
     
-    await r2Client.send(command);
+    await s3Client.send(command);
     return true;
     
   } catch (error) {
@@ -144,13 +170,17 @@ async function fileExistsInR2(objectKey) {
  * @returns {Promise<Object>} - Metadaten
  */
 async function getFileMetadata(objectKey) {
+  if (!isR2Available) {
+    return null;
+  }
+
   try {
     const command = new HeadObjectCommand({
       Bucket: BUCKET_NAME,
       Key: objectKey,
     });
     
-    const response = await r2Client.send(command);
+    const response = await s3Client.send(command);
     
     return {
       size: response.ContentLength,
@@ -161,7 +191,7 @@ async function getFileMetadata(objectKey) {
     
   } catch (error) {
     console.error(`Error getting metadata for ${objectKey}:`, error);
-    throw new Error(`Failed to get file metadata: ${error.message}`);
+    return null;
   }
 }
 
@@ -173,6 +203,10 @@ async function getFileMetadata(objectKey) {
  * @returns {Promise<Object>} - Upload-URL und Object Key
  */
 async function getUploadUrl(fileName, contentType, expiresIn = 3600) {
+  if (!isR2Available) {
+    return null;
+  }
+
   try {
     const timestamp = Date.now();
     const objectKey = `files/${timestamp}-${fileName}`;
@@ -183,7 +217,7 @@ async function getUploadUrl(fileName, contentType, expiresIn = 3600) {
       ContentType: contentType,
     });
     
-    const signedUrl = await getSignedUrl(r2Client, command, { expiresIn });
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn });
     
     return {
       uploadUrl: signedUrl,
@@ -192,7 +226,7 @@ async function getUploadUrl(fileName, contentType, expiresIn = 3600) {
     
   } catch (error) {
     console.error(`Error generating upload URL for ${fileName}:`, error);
-    throw new Error(`Failed to generate upload URL: ${error.message}`);
+    return null;
   }
 }
 
@@ -201,23 +235,20 @@ async function getUploadUrl(fileName, contentType, expiresIn = 3600) {
  * @returns {Promise<boolean>} - Verbindung erfolgreich
  */
 async function testR2Connection() {
+  if (!isR2Available) {
+    return false;
+  }
+
   try {
-    // Versuche Bucket-Informationen abzurufen
-    const command = new HeadObjectCommand({
+    const testKey = 'test-connection-' + Date.now();
+    await s3Client.send(new PutObjectCommand({
       Bucket: BUCKET_NAME,
-      Key: 'test-connection', // Diese Datei muss nicht existieren
-    });
-    
-    await r2Client.send(command);
+      Key: testKey,
+      Body: 'test'
+    }));
     return true;
-    
   } catch (error) {
-    if (error.name === 'NotFound') {
-      // Bucket existiert, aber Datei nicht - das ist OK
-      console.log('R2 connection test successful');
-      return true;
-    }
-    console.error('R2 connection test failed:', error);
+    console.warn('R2 connection test failed:', error);
     return false;
   }
 }
@@ -230,6 +261,7 @@ module.exports = {
   getFileMetadata,
   getUploadUrl,
   testR2Connection,
-  r2Client,
+  isR2Available,
+  s3Client,
   BUCKET_NAME,
 };

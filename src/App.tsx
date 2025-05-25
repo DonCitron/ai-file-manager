@@ -2,6 +2,17 @@ import { useState, useEffect } from 'react';
 import Login from './components/Login';
 import FileManager from './components/FileManager';
 
+// Simple Error Boundary
+function ErrorBoundary({ children }: { children: React.ReactNode }) {
+  const [error, setError] = useState<Error | null>(null);
+  // @ts-ignore
+  window.__setAppError = setError;
+  if (error) {
+    return <div style={{ color: 'red', padding: 32 }}>Fehler: {error.message}</div>;
+  }
+  return children;
+}
+
 function App() {
   const [user, setUser] = useState<{ id: number; username: string; role: string } | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -45,4 +56,6 @@ function App() {
   return <FileManager user={user} onLogout={handleLogout} />;
 }
 
-export default App;
+export default function AppWithBoundary() {
+  return <ErrorBoundary><App /></ErrorBoundary>;
+}
