@@ -48,7 +48,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 // FileService initialisieren
-const fileService = new FileService(db);
+const fileService = new FileService(db, redisClient);
 
 // Middleware Setup
 app.use(cors({

@@ -3,20 +3,14 @@ const path = require('path');
 const crypto = require('crypto');
 const { analyzeFileWithGemini, detectSimilarFiles, generateDuplicateGroupId } = require('../geminiService');
 const { uploadToR2, getDownloadUrl } = require('../r2Service');
-const redis = require('redis');
-let redisClient;
-try {
-  redisClient = require('../server').redisClient;
-} catch {
-  redisClient = null;
-}
 
 /**
  * Service für Datei-Operationen
  */
 class FileService {
-  constructor(db) {
+  constructor(db, redisClient) {
     this.db = db;
+    this.redisClient = redisClient;
     this.uploadDir = path.resolve(__dirname, '../uploads');
     this.permanentStorageDir = path.resolve(__dirname, '../permanent_storage');
   }
@@ -388,12 +382,12 @@ class FileService {
   }
 
   async getFileById(fileId) {
-    if (redisClient) {
-      const cached = await redisClient.get(`file:${fileId}`);
+    if (this.redisClient) {
+      const cached = await this.redisClient.get(`file:${fileId}`);
       if (cached) return JSON.parse(cached);
     }
     // ... fetch from DB ...
-    if (redisClient) await redisClient.set(`file:${fileId}`, JSON.stringify(file), { EX: 3600 });
+    if (this.redisClient) await this.redisClient.set(`file:${fileId}`, JSON.stringify(file), { EX: 3600 });
     return file;
   }
 }
