@@ -3,19 +3,49 @@ import type { MyFileData } from '../services/fileStore';
 import { Sparkles, File, X, Eye, Download, LogOut, Calendar as CalendarIcon } from 'lucide-react';
 import { useFileStore } from '../services/fileStore';
 import { FilePreview } from './FilePreview';
+import AISearch from './AISearch';
+import { GlobalChat } from './GlobalChat';
+import { useRef } from 'react';
+import { API_BASE_URL } from '../config';
 
 interface FileManagerProps {
   user: { id: number; username: string; role: string };
   onLogout: () => void;
 }
 
+// Add BackendFile type for conversion
+type BackendFile = {
+  id: number;
+  name: string;
+  type: string;
+  size: number;
+  path: string;
+  tags: string[];
+  uploadDate: string;
+};
+
 const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
   const { files, fetchFiles } = useFileStore();
   const [customFolders] = useState<string[]>([]);
+  const [showChat, setShowChat] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
+
+  // Convert MyFileData to BackendFile for AI Search
+  const toBackendFile = (file: MyFileData): BackendFile => ({
+    id: file.id,
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    path: '', // No path in MyFileData, so use empty string
+    tags: file.tags || [],
+    uploadDate: file.uploadDate,
+  });
 
   const getAIFolders = () => {
     const folders = [
@@ -56,6 +86,43 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
   const getFilesInCustomFolder = (folderName: string) => {
     return files.filter(file => (file as any).customFolder === folderName);
   };
+
+  // File Upload Handler
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    setUploading(true);
+    setUploadError(null);
+    const formData = new FormData();
+    Array.from(e.target.files).forEach(file => formData.append('files', file));
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      let data = null;
+      let text = '';
+      try {
+        text = await res.text();
+        data = text ? JSON.parse(text) : null;
+      } catch (jsonErr) {
+        // Not JSON or empty
+        data = null;
+      }
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Upload fehlgeschlagen (Status ${res.status})`);
+      }
+      await fetchFiles();
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (err: any) {
+      setUploadError(err.message || 'Unbekannter Fehler beim Upload. Möglicherweise nicht eingeloggt oder Server nicht erreichbar.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // AI Search Handler
+  const handleSearchResults = () => {};
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -113,10 +180,29 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
           <div className="flex items-center space-x-4">
             <span className="text-gray-600">Alle Dateien</span>
             <span className="text-gray-500">({files.length} Elemente)</span>
-            <span className="cursor-pointer">⊞</span>
-            <span className="cursor-pointer">☰</span>
+            <button className="cursor-pointer" onClick={() => setShowChat(v => !v)}>
+              💬 Chat
+            </button>
           </div>
         </div>
+        {/* File Upload */}
+        <div className="mb-4">
+          <label className="upload-area block cursor-pointer border-2 border-dashed border-blue-400 rounded-lg p-6 text-center bg-white hover:bg-blue-50 transition-colors">
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              disabled={uploading}
+            />
+            <span className="text-blue-500 font-semibold">Dateien hierher ziehen oder klicken zum Hochladen</span>
+          </label>
+          {uploading && <div className="text-blue-500 mt-2">Hochladen...</div>}
+          {uploadError && <div className="text-red-500 mt-2">{uploadError}</div>}
+        </div>
+        {/* AI Search */}
+        <AISearch files={files.map(toBackendFile)} onSearchResults={handleSearchResults} />
         {/* File List */}
         <div className="bg-white rounded shadow p-4">
           <div style={{ height: 600, width: '100%' }}>
@@ -137,6 +223,18 @@ const FileManager: React.FC<FileManagerProps> = ({ user, onLogout }) => {
             ))}
           </div>
         </div>
+        {/* Global Chat Sidebar */}
+        {showChat && (
+          <div className="fixed top-0 right-0 h-full w-96 bg-gray-900 shadow-lg z-50 flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-800">
+              <span className="text-white font-bold">Global Chat</span>
+              <button className="text-gray-400 hover:text-white" onClick={() => setShowChat(false)}>✖</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              <GlobalChat currentUser={{ id: user.id, username: user.username }} />
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

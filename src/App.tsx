@@ -57,5 +57,5 @@ function App() {
 }
 
 export default function AppWithBoundary() {
-  return <ErrorBoundary><App /></ErrorBoundary>;
+  return <ErrorBoundary><App /></ErrorBoundary>;  
 }

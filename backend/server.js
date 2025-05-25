@@ -334,6 +334,58 @@ app.post('/upload',
   })
 );
 
+// Add /api/upload as an alias for /upload
+app.post('/api/upload', 
+  authMiddleware,
+  upload.array('files'),
+  asyncHandler(async (req, res) => {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'Keine Dateien hochgeladen' });
+    }
+
+    console.log(`📤 ${req.files.length} Dateien hochgeladen von Benutzer ${req.user.username}`);
+
+    const results = [];
+    const errors = [];
+
+    // Verarbeite jede Datei
+    for (const file of req.files) {
+      try {
+        const result = await fileService.processUploadedFile(file, req.user.id);
+        results.push(result);
+      } catch (error) {
+        console.error(`❌ Fehler bei Datei ${file.originalname}:`, error);
+        errors.push({
+          fileName: file.originalname,
+          error: error.message
+        });
+      }
+    }
+
+    // Antwort senden
+    if (errors.length === 0) {
+      res.json({
+        success: true,
+        message: `${results.length} Dateien erfolgreich hochgeladen`,
+        files: results
+      });
+    } else if (results.length > 0) {
+      res.status(207).json({
+        partial: true,
+        message: `${results.length} von ${req.files.length} Dateien hochgeladen`,
+        files: results,
+        errors: errors
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Keine Dateien konnten hochgeladen werden',
+        errors: errors
+      });
+    }
+  })
+);
+
 // Dateien abrufen (geschützt mit Auth)
 app.get('/files', 
   authMiddleware,
