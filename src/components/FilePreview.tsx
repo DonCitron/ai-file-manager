@@ -1,5 +1,4 @@
 import { Eye, Download, X } from 'lucide-react';
-import React, { useState } from 'react';
 import type { MyFileData } from '../services/fileStore';
 
 interface FilePreviewProps {
@@ -7,23 +6,6 @@ interface FilePreviewProps {
 }
 
 export const FilePreview: React.FC<FilePreviewProps> = ({ file }) => {
-  const [preview, setPreview] = useState<string | null>(null);
-
-  const getPreview = async () => {
-    if (file.type.startsWith('image/')) {
-      setPreview(`/download/${file.name}`);
-    } else if (file.type === 'application/pdf') {
-      setPreview(`/download/${file.name}`);
-    } else {
-      setPreview(null);
-    }
-  };
-
-  React.useEffect(() => {
-    getPreview();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file]);
-
   return (
     <div>
       {file.name}

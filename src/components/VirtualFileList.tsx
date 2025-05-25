@@ -14,7 +14,7 @@ export const VirtualFileList: React.FC = () => {
       itemSize={80}
       width={'100%'}
     >
-      {({ index, style }) => (
+      {({ index, style }: { index: number; style: React.CSSProperties }) => (
         <div style={style}>
           <FilePreview file={files[index] as MyFileData} />
         </div>
