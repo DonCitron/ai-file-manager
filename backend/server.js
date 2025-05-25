@@ -284,6 +284,11 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Add a root endpoint for health check
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'AI File Manager backend running' });
+});
+
 // Datei-Upload (geschützt mit Auth)
 app.post('/upload', 
   authMiddleware,
